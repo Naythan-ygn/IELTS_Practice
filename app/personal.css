@@ -1,0 +1,326 @@
+.site-credit {
+  padding: 22px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  border-top: 1px solid var(--border);
+}
+body:has(.app) .site-credit {
+  margin-left: 248px;
+}
+.login-page {
+  min-height: calc(100svh - 62px);
+  display: grid;
+  place-items: center;
+  padding: 50px 24px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 12% 20%, #e4ebff 0, transparent 50%),
+    radial-gradient(ellipse at 90% 85%, #fce4ea 0, transparent 45%), #f9faff;
+  color: #15223b;
+}
+.login-orbit {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  border: 1px solid #dce4f680;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-38%, -23%);
+}
+.login-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: min(940px, 100%);
+  background: #fff;
+  border: 1px solid #ffffff;
+  border-radius: 28px;
+  box-shadow: 0 24px 90px #28447614;
+  overflow: hidden;
+}
+.login-story {
+  padding: 38px 42px;
+  background: linear-gradient(145deg, #102c65, #204ba5 70%, #4964bb);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 44px;
+  position: relative;
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 0.13em;
+  font-weight: 700;
+}
+.login-heart {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  background: #ffffff13;
+  border: 1px solid #ffffff30;
+  color: #ffc7d6;
+  margin-bottom: 26px;
+  transform: rotate(-6deg);
+}
+.login-dedication {
+  color: #ffd8e2;
+  font-size: 13px;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  margin: 0 0 16px;
+}
+.login-story h1 {
+  font-family: Manrope, Arial, sans-serif;
+  font-size: 42px;
+  line-height: 1.23;
+  letter-spacing: -1.8px;
+  margin: 0 0 24px;
+  color: #fff;
+}
+.login-story-copy > p:last-child {
+  line-height: 1.9;
+  color: #d2dff9;
+  font-size: 14px;
+  max-width: 290px;
+}
+.login-small {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #bfcef0;
+}
+.login-form-panel {
+  padding: 58px 44px;
+  align-self: center;
+}
+.login-lock {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  background: #edf3ff;
+  color: #1659fc;
+  margin-bottom: 20px;
+}
+.login-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  font-weight: 700;
+  color: #6a7b97;
+}
+.login-form-panel h2 {
+  font-family: Manrope, Arial, sans-serif;
+  font-size: 29px;
+  letter-spacing: -1px;
+  margin: 10px 0;
+}
+.login-intro {
+  color: #72809a;
+  line-height: 1.8;
+  margin: 0 0 28px;
+  font-size: 13px;
+}
+.login-form-panel label {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  margin: 18px 0 8px;
+}
+.login-form-panel input {
+  width: 100%;
+  padding: 14px 15px;
+  border: 1px solid #dfe6f2;
+  background: #fbfcff;
+  color: #15223b;
+  border-radius: 10px;
+  outline: none;
+}
+.login-form-panel input:focus {
+  border-color: #648bff;
+  box-shadow: 0 0 0 3px #1659fc13;
+}
+.login-form-panel input::placeholder {
+  color: #98a4b7;
+  font-size: 12px;
+}
+.login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  margin-top: 26px;
+  padding: 15px;
+  border: 0;
+  border-radius: 10px;
+  background: #1659fc;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 6px 18px #1659fc22;
+}
+.login-submit:hover {
+  background: #124bd8;
+}
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.login-reassurance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #8a96aa;
+  margin: 24px 0 0;
+}
+.login-error {
+  color: #ad284c;
+  background: #fff0f3;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+}
+.markdown-response {
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  white-space: normal;
+}
+.chat-message > div {
+  min-width: 0;
+}
+.markdown-response strong {
+  font-size: inherit;
+}
+.markdown-response > :first-child {
+  margin-top: 0;
+}
+.markdown-response > :last-child {
+  margin-bottom: 0;
+}
+.markdown-response p {
+  white-space: normal !important;
+  margin: 0 0 0.85em;
+}
+.markdown-response h1,
+.markdown-response h2,
+.markdown-response h3,
+.markdown-response h4 {
+  font-size: 1.12em;
+  line-height: 1.5;
+  margin: 1.2em 0 0.5em;
+}
+.markdown-response ul,
+.markdown-response ol {
+  padding-left: 1.6em;
+  margin: 0.65em 0;
+}
+.markdown-response li {
+  margin: 0.25em 0;
+}
+.markdown-response a {
+  color: var(--blue);
+  text-decoration: underline;
+}
+.markdown-response blockquote {
+  border-left: 3px solid var(--blue);
+  padding: 0.3em 1em;
+  margin: 1em 0;
+  background: var(--blue-soft);
+}
+.markdown-response code {
+  font-family: Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--blue-soft);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.markdown-response pre {
+  overflow: auto;
+  background: var(--bg);
+  padding: 15px;
+  border-radius: 10px;
+  white-space: pre;
+  max-width: 100%;
+}
+.markdown-response pre code {
+  padding: 0;
+  background: none;
+}
+.markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.markdown-response table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.93em;
+}
+.markdown-response th,
+.markdown-response td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.markdown-response th {
+  background: var(--blue-soft);
+}
+.markdown-response hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.2em 0;
+}
+@media (max-width: 760px) {
+  body:has(.app) .site-credit {
+    margin-left: 0;
+  }
+  .login-page {
+    padding: 24px 16px;
+  }
+  .login-card {
+    grid-template-columns: 1fr;
+    max-width: 460px;
+    border-radius: 22px;
+  }
+  .login-story {
+    padding: 28px;
+    gap: 22px;
+  }
+  .login-heart {
+    display: none;
+  }
+  .login-story h1 {
+    font-size: 30px;
+    margin-bottom: 12px;
+  }
+  .login-story-copy > p:last-child,
+  .login-small {
+    display: none;
+  }
+  .login-dedication {
+    margin: 0 0 12px;
+  }
+  .login-form-panel {
+    padding: 30px 28px;
+  }
+  .login-lock {
+    display: none;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1200px) {
+  body:has(.app) .site-credit {
+    margin-left: 220px;
+  }
+}

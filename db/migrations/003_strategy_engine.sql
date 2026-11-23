@@ -1,0 +1,11 @@
+CREATE TABLE question_types (id TEXT PRIMARY KEY, skill TEXT NOT NULL, name TEXT NOT NULL, content TEXT NOT NULL);
+CREATE TABLE exam_strategies (id TEXT PRIMARY KEY, question_type_id TEXT REFERENCES question_types(id), content TEXT NOT NULL);
+CREATE TABLE strategy_exercises (id TEXT PRIMARY KEY, strategy_id TEXT NOT NULL REFERENCES exam_strategies(id), phase TEXT NOT NULL, content TEXT NOT NULL);
+CREATE TABLE strategy_attempts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, strategy_id TEXT NOT NULL, kind TEXT NOT NULL, phase TEXT NOT NULL, day INTEGER, source_attempt TEXT, started_at TEXT NOT NULL, deadline TEXT, submitted_at TEXT, snapshot TEXT NOT NULL, answers TEXT NOT NULL DEFAULT '{}', timings TEXT NOT NULL DEFAULT '{}', result TEXT);
+CREATE INDEX strategy_attempt_user ON strategy_attempts(user_id, submitted_at);
+CREATE TABLE strategy_progress (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, strategy_id TEXT NOT NULL, understood_at TEXT, PRIMARY KEY(user_id,strategy_id));
+CREATE TABLE course_progress_v2 (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, day INTEGER NOT NULL, stage TEXT NOT NULL, body TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(user_id,day,stage));
+CREATE TABLE question_timings (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, attempt_id TEXT NOT NULL REFERENCES attempts(id) ON DELETE CASCADE, data TEXT NOT NULL, PRIMARY KEY(user_id,attempt_id));
+CREATE TABLE micro_lessons (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, strategy_id TEXT NOT NULL, title TEXT NOT NULL, reason TEXT NOT NULL, source_attempt TEXT, snapshot TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX micro_user ON micro_lessons(user_id,created_at);
+CREATE TABLE score_planning_scenarios (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, data TEXT NOT NULL, created_at TEXT NOT NULL);

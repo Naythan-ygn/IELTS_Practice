@@ -1,0 +1,2 @@
+CREATE TABLE ai_reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, source_kind TEXT NOT NULL, source_id TEXT NOT NULL, question_id TEXT NOT NULL DEFAULT '', response TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(user_id,source_kind,source_id,question_id));
+CREATE INDEX ai_reviews_user ON ai_reviews(user_id,created_at);

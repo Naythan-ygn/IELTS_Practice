@@ -1,0 +1,1 @@
+CREATE TABLE coaching_responses (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, mode TEXT NOT NULL, prompt TEXT NOT NULL, original TEXT NOT NULL, revision TEXT NOT NULL DEFAULT '', feedback TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(user_id,mode));

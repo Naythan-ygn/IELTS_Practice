@@ -1,0 +1,555 @@
+/* Main navigation and task controls stay readable at normal browser zoom. */
+.nav-item {
+  font-size: 14px;
+  white-space: normal;
+  line-height: 1.5;
+  min-height: 44px;
+  gap: 10px;
+}
+.sidebar {
+  width: 260px;
+}
+.main {
+  margin-left: 260px;
+}
+.brand small {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+.primary,
+.outline,
+.white-button,
+.danger,
+.danger-outline,
+.text-button,
+.start-button,
+.completed-button {
+  font-size: 14px;
+}
+.mission-title h3 {
+  font-size: 14px;
+}
+.mission-title > span {
+  font-size: 12px;
+  flex-wrap: wrap;
+  line-height: 1.6;
+}
+.start-button {
+  gap: 4px;
+}
+.mission-row {
+  padding: 17px 0;
+}
+.mission-footer {
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.section-heading p,
+.page-heading p {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.stat-label {
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 38px;
+}
+.stat-card small {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.hero {
+  height: 300px;
+}
+.hero-tag {
+  font-size: 12px;
+  letter-spacing: 1.3px;
+}
+.hero p {
+  font-size: 14px;
+}
+.hero .white-button {
+  font-size: 14px;
+}
+.hero .white-button > span:last-child {
+  font-size: 12px;
+}
+.hero-art {
+  top: 0;
+}
+.hero-target > span:first-child,
+.hero-target > span:last-child {
+  font-size: 10px;
+}
+.orbit-label {
+  font-size: 12px;
+  right: 38px;
+  bottom: 10px;
+}
+.coach-card p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.coach-card .primary {
+  font-size: 14px;
+  gap: 5px;
+}
+.coach-card > .tag {
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+.coach-note {
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.next-checkpoint h3 {
+  font-size: 17px;
+}
+.next-checkpoint p {
+  font-size: 14px;
+}
+.next-checkpoint .text-button {
+  font-size: 14px;
+}
+.next-checkpoint .tag {
+  font-size: 11px;
+}
+.dashboard-columns {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.mission .section-heading {
+  align-items: flex-start;
+}
+.mission-completion {
+  line-height: 1.6;
+}
+.mission-completion span {
+  font-size: 12px;
+}
+.skills-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.skill-card h3 {
+  font-size: 14px;
+}
+.skill-card > strong {
+  font-size: 17px;
+}
+.skill-card > span:not(.skill-icon),
+.skill-card small {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.skill-card > span:not(.skill-icon) {
+  min-height: 25px;
+}
+.skill-card .skill-icon {
+  margin-bottom: 10px;
+}
+.skill-card {
+  padding: 20px;
+}
+.card-chevron {
+  right: 17px;
+}
+.sidebar-goal strong {
+  font-size: 12px;
+}
+.sidebar-goal p {
+  font-size: 12px;
+}
+.sidebar-goal .row.between {
+  font-size: 12px;
+  align-items: flex-start;
+}
+.sidebar-goal .row.between strong {
+  font-size: 12px;
+}
+.sidebar-goal {
+  margin-top: 25px;
+}
+.profile strong {
+  font-size: 14px;
+}
+.profile small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.workspace-label {
+  font-size: 11px;
+}
+.topbar .breadcrumb {
+  font-size: 12px;
+}
+.day-pill,
+.countdown {
+  font-size: 12px;
+}
+.lesson-card h3 {
+  font-size: 16px;
+}
+.lesson-card p,
+.lesson-card > .row:last-of-type {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.activity-card p {
+  font-size: 16px;
+}
+.activity-meta {
+  font-size: 14px;
+  flex-wrap: wrap;
+  line-height: 1.8;
+}
+.empty p {
+  font-size: 14px;
+}
+.settings-side p,
+.settings-layout > .panel > p {
+  font-size: 14px;
+}
+.form-grid label,
+.toggle-row strong {
+  font-size: 14px;
+}
+.toggle-row small {
+  font-size: 12px;
+}
+.question-navigator a {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+.options label,
+.question legend {
+  font-size: 16px;
+}
+.text-answer {
+  font-size: 16px;
+}
+.exam-status {
+  font-size: 12px;
+}
+.writing-prompt > p {
+  font-size: 16px;
+}
+.writing-prompt .worked-example p {
+  font-size: 14px;
+}
+.worked-example p {
+  font-size: 16px;
+}
+.writing-feedback > p {
+  font-size: 14px;
+}
+.criteria-grid h3 {
+  font-size: 14px;
+}
+.criteria-grid p {
+  font-size: 14px;
+}
+.criteria-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.chat-message p {
+  font-size: 16px;
+}
+.suggestion-grid button {
+  font-size: 14px;
+}
+.chat-composer input {
+  font-size: 16px;
+}
+.mistake-card h3 {
+  font-size: 17px;
+}
+.mistake-card p {
+  font-size: 16px;
+}
+.panel.info-panel p,
+.learning-tip p,
+.pending-card p {
+  font-size: 14px;
+}
+.footer {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.table-sub {
+  font-size: 12px;
+}
+table {
+  font-size: 14px;
+}
+th {
+  font-size: 12px;
+}
+@media (min-width: 1500px) {
+  .skills-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .skill-card {
+    padding: 18px 15px;
+  }
+  .skill-card > strong {
+    font-size: 15px;
+  }
+  .skill-card > span:not(.skill-icon) {
+    min-height: 40px;
+  }
+  .dashboard-columns {
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+}
+@media (max-width: 1200px) {
+  .hero-copy {
+    max-width: 63%;
+  }
+  .hero .white-button > span:last-child,
+  .button-separator {
+    display: none;
+  }
+  .dashboard-columns {
+    grid-template-columns: 1fr;
+  }
+  .right-stack {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .next-checkpoint {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .mission-title h3 {
+    font-size: 15px;
+  }
+  .mission-title > span {
+    font-size: 12px;
+  }
+  .coach-card h2 br {
+    display: none;
+  }
+  .hero-art {
+    right: -65px;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat-label {
+    min-height: 0;
+  }
+}
+@media (max-width: 1000px) {
+  .topbar .breadcrumb {
+    font-size: 0;
+  }
+  .topbar .breadcrumb > svg {
+    display: none;
+  }
+  .topbar .breadcrumb strong {
+    font-size: 12px;
+  }
+  .hero-copy {
+    max-width: 70%;
+  }
+  .hero-tag {
+    font-size: 10px;
+  }
+  .hero-art {
+    right: -120px;
+    opacity: 0.65;
+  }
+  .hero-target > span {
+    font-size: 10px;
+  }
+  .hero p {
+    font-size: 14px;
+  }
+  .hero .white-button {
+    font-size: 14px;
+  }
+  .hero-art .orbit-label {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .main {
+    margin-left: 0;
+  }
+  .sidebar {
+    width: 260px;
+  }
+  .hero {
+    height: 300px;
+    padding-top: 25px;
+  }
+  .hero-copy {
+    max-width: 75%;
+  }
+  .hero-art {
+    right: -83px;
+    opacity: 0.6;
+  }
+  .skills-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .skill-card {
+    padding: 16px;
+  }
+  .skill-card > strong {
+    font-size: 15px;
+  }
+  .skill-card > span:not(.skill-icon),
+  .skill-card small {
+    font-size: 12px;
+  }
+  .mission-row {
+    gap: 12px;
+  }
+  .mission-title h3 {
+    font-size: 14px;
+  }
+  .mission-title > span {
+    font-size: 12px;
+  }
+  .start-button {
+    font-size: 14px;
+  }
+  .mission-footer {
+    font-size: 12px;
+  }
+  .section-heading .text-button {
+    font-size: 12px;
+  }
+  .topbar-right {
+    gap: 8px;
+  }
+  .topbar .day-pill {
+    font-size: 11px;
+  }
+  .hero-tag {
+    font-size: 10px;
+  }
+}
+@media (max-width: 500px) {
+  .hero-copy {
+    max-width: 100%;
+  }
+  .hero-art {
+    right: -130px;
+    opacity: 0.3;
+  }
+  .hero p {
+    max-width: 260px;
+  }
+  .hero-tag {
+    font-size: 10px;
+  }
+  .hero h2 {
+    font-size: 34px;
+  }
+  .stats-grid {
+    gap: 10px;
+  }
+  .stat-label {
+    font-size: 12px;
+    max-width: calc(100% - 20px);
+    min-height: 36px;
+  }
+  .stat-card small {
+    font-size: 12px;
+  }
+  .right-stack {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .coach-card p {
+    font-size: 14px;
+  }
+  .coach-card .primary {
+    font-size: 14px;
+  }
+  .next-checkpoint {
+    display: none;
+  }
+  .skills-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .skill-card {
+    padding: 18px;
+  }
+  .mission-title h3 {
+    font-size: 14px;
+  }
+  .mission-title > span {
+    font-size: 12px;
+  }
+  .mission-title > span > i:last-of-type,
+  .mission-title > span > i:last-of-type + span {
+    display: none;
+  }
+  .mission-row .skill-icon {
+    width: 32px;
+    height: 34px;
+  }
+  .mission-row {
+    gap: 9px;
+  }
+  .start-button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .criteria-grid {
+    grid-template-columns: 1fr;
+  }
+  .primary,
+  .outline,
+  .white-button,
+  .danger,
+  .danger-outline {
+    font-size: 14px;
+  }
+  .exam-status {
+    font-size: 12px;
+  }
+  .section-heading {
+    flex-wrap: wrap;
+  }
+  .mission .section-heading {
+    flex-wrap: nowrap;
+  }
+  .mission-completion {
+    white-space: nowrap;
+  }
+  .mission-completion span {
+    font-size: 10px;
+  }
+  .mission .section-heading h2 {
+    font-size: 16px;
+  }
+  .coach-note {
+    font-size: 12px;
+  }
+  .hero-art .hero-target > span {
+    display: none;
+  }
+  .topbar .breadcrumb strong {
+    font-size: 11px;
+  }
+  .topbar-right .avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .topbar .day-pill {
+    font-size: 10px;
+  }
+  .mistake-bottom label {
+    font-size: 12px;
+  }
+  .footer {
+    font-size: 12px;
+  }
+}

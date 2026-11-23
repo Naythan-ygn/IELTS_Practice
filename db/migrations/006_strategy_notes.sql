@@ -1,0 +1,1 @@
+ALTER TABLE strategy_progress ADD COLUMN note TEXT NOT NULL DEFAULT '';

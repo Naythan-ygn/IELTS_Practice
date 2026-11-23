@@ -21,10 +21,10 @@ test("default credentials and server overrides require an exact password", () =>
     }),
   );
 });
-test("login adopts verified existing progress, shares the account, and revokes sessions", () => {
+test("login adopts verified existing progress, shares the account, and revokes sessions", async () => {
   const id = "a".repeat(48);
-  ensureUser(id);
-  run(
+  await ensureUser(id);
+  await run(
     "UPDATE profiles SET data=? WHERE user_id=?",
     JSON.stringify({ name: "Existing learner" }),
     id,
@@ -32,32 +32,38 @@ test("login adopts verified existing progress, shares the account, and revokes s
   const key = Buffer.from("fixture-secret");
   writeFileSync(path.join(dataDir, "session.key"), key);
   const legacy = id + "." + createHmac("sha256", key).update(id).digest("hex");
-  assert.equal(createLogin("TTH", "wrong", legacy, {}), null);
-  const login = createLogin("TTH", "9834", legacy, {})!;
+  assert.equal(await createLogin("TTH", "wrong", legacy, {}), null);
+  const login = (await createLogin("TTH", "9834", legacy, {}))!;
   assert.equal(login.user, id);
-  assert.equal(sessionUser(login.token), id);
+  assert.equal(await sessionUser(login.token), id);
   assert.equal(
-    JSON.parse(row("SELECT data FROM profiles WHERE user_id=?", id)!.data).name,
+    JSON.parse(
+      (await row("SELECT data FROM profiles WHERE user_id=?", id))!.data,
+    ).name,
     "Existing learner",
   );
   assert.notEqual(
-    row("SELECT token_hash FROM login_sessions WHERE user_id=?", id)!
+    (await row("SELECT token_hash FROM login_sessions WHERE user_id=?", id))!
       .token_hash,
     login.token,
   );
-  const second = createLogin("TTH", "9834", undefined, {})!;
+  const second = (await createLogin("TTH", "9834", undefined, {}))!;
   assert.equal(second.user, id);
-  revokeLogin(login.token);
-  assert.equal(sessionUser(login.token), null);
-  assert.equal(sessionUser(second.token), id);
-  run("UPDATE login_sessions SET expires_at=?", "2000-01-01T00:00:00.000Z");
-  assert.equal(sessionUser(second.token), null);
-  run("DELETE FROM users WHERE id=?", id);
+  await revokeLogin(login.token);
+  assert.equal(await sessionUser(login.token), null);
+  assert.equal(await sessionUser(second.token), id);
+  await run(
+    "UPDATE login_sessions SET expires_at=?",
+    "2000-01-01T00:00:00.000Z",
+  );
+  assert.equal(await sessionUser(second.token), null);
+  await run("DELETE FROM users WHERE id=?", id);
   assert.equal(
-    row("SELECT user_id FROM login_accounts WHERE username=?", "TTH")!.user_id,
+    (await row("SELECT user_id FROM login_accounts WHERE username=?", "TTH"))!
+      .user_id,
     null,
   );
-  const fresh = createLogin("TTH", "9834", legacy, {})!;
+  const fresh = (await createLogin("TTH", "9834", legacy, {}))!;
   assert.notEqual(fresh.user, id);
-  assert.equal(sessionUser("forged"), null);
+  assert.equal(await sessionUser("forged"), null);
 });

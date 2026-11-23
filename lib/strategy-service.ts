@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rows, row, run, transaction } from "./db";
+import { rows, row, run, transaction, batch } from "./db";
 import { patterns, strategies, strategyNotes } from "./patterns";
 import {
   strategyQuestions,
@@ -16,48 +16,45 @@ import {
 } from "./strategy-analytics";
 import { isCorrect, approximateBand } from "./scoring";
 let seeded = false;
-function seed() {
+let seeding: Promise<void> | undefined;
+async function seed() {
   if (seeded) return;
-  transaction(() => {
-    for (const p of patterns)
-      run(
-        "INSERT OR IGNORE INTO question_types(id,skill,name,content) VALUES (?,?,?,?)",
-        p.id,
-        p.skill,
-        p.name,
-        JSON.stringify(p),
-      );
-    for (const s of strategies)
-      run(
-        "INSERT OR IGNORE INTO exam_strategies(id,question_type_id,content) VALUES (?,?,?)",
-        s.id,
-        s.patternId,
-        JSON.stringify(s),
-      );
-    for (const q of strategyQuestions)
-      run(
-        "INSERT OR IGNORE INTO strategy_exercises(id,strategy_id,phase,content) VALUES (?,?,?,?)",
-        q.id,
-        q.strategyId,
-        q.phase,
-        JSON.stringify(q),
-      );
-  });
-  seeded = true;
+  if (!seeding)
+    seeding = batch([
+      ...patterns.map((p) => ({
+        sql: "INSERT OR IGNORE INTO question_types(id,skill,name,content) VALUES (?,?,?,?)",
+        args: [p.id, p.skill, p.name, JSON.stringify(p)],
+      })),
+      ...strategies.map((s) => ({
+        sql: "INSERT OR IGNORE INTO exam_strategies(id,question_type_id,content) VALUES (?,?,?)",
+        args: [s.id, s.patternId, JSON.stringify(s)],
+      })),
+      ...strategyQuestions.map((q) => ({
+        sql: "INSERT OR IGNORE INTO strategy_exercises(id,strategy_id,phase,content) VALUES (?,?,?,?)",
+        args: [q.id, q.strategyId, q.phase, JSON.stringify(q)],
+      })),
+    ])
+      .then(() => {
+        seeded = true;
+      })
+      .finally(() => {
+        seeding = undefined;
+      });
+  await seeding;
 }
-export function assertCoachingAllowed(user: string) {
+export async function assertCoachingAllowed(user: string) {
   if (
-    row(
+    (await row(
       "SELECT id FROM attempts WHERE user_id=? AND mode=? AND submitted_at IS NULL AND deadline>?",
       user,
       "strict",
       new Date().toISOString(),
-    ) ||
-    row(
+    )) ||
+    (await row(
       "SELECT id FROM strategy_attempts WHERE user_id=? AND submitted_at IS NULL AND deadline>?",
       user,
       new Date().toISOString(),
-    )
+    ))
   )
     throw Error(
       "Finish your timed assessment before opening coaching or starting another activity.",
@@ -94,14 +91,14 @@ function present(a: Record<string, any>): Record<string, any> {
     }),
   };
 }
-export function beginStrategy(user: string, body: any) {
-  seed();
+export async function beginStrategy(user: string, body: any) {
+  await seed();
   const phase = String(body.phase || "guided");
   if (!["guided", "independent", "timed", "micro", "trap"].includes(phase))
     throw Error("Invalid strategy phase.");
   const strategy = strategies.find((s) => s.id === body.strategyId);
   if (phase !== "trap" && !strategy) throw Error("Strategy not found.");
-  const existing = row(
+  const existing = await row(
     "SELECT * FROM strategy_attempts WHERE user_id=? AND strategy_id=? AND phase=? AND day IS ? AND submitted_at IS NULL AND (? IS NULL OR json_extract(snapshot,'$.microId')=?)",
     user,
     phase === "trap" ? "TRAPS" : strategy!.id,
@@ -112,11 +109,11 @@ export function beginStrategy(user: string, body: any) {
   );
   if (existing) {
     if (existing.deadline && Date.parse(existing.deadline) <= Date.now())
-      return submitStrategy(user, existing.id);
-    if (!existing.deadline) assertCoachingAllowed(user);
+      return await submitStrategy(user, existing.id);
+    if (!existing.deadline) await assertCoachingAllowed(user);
     return present(existing);
   }
-  assertCoachingAllowed(user);
+  await assertCoachingAllowed(user);
   const day = body.day === undefined ? null : Number(body.day);
   if (day !== null && (!Number.isInteger(day) || day < 1 || day > 30))
     throw Error("Invalid study day.");
@@ -128,7 +125,7 @@ export function beginStrategy(user: string, body: any) {
         );
   let microId: string | null = null;
   if (phase === "micro") {
-    const micro = row(
+    const micro = await row(
       "SELECT * FROM micro_lessons WHERE id=? AND user_id=?",
       String(body.microId),
       user,
@@ -155,7 +152,7 @@ export function beginStrategy(user: string, body: any) {
     microId,
     version: 2,
   };
-  run(
+  await run(
     "INSERT INTO strategy_attempts(id,user_id,strategy_id,kind,phase,day,source_attempt,started_at,deadline,snapshot) VALUES (?,?,?,?,?,?,?,?,?,?)",
     id,
     user,
@@ -168,15 +165,17 @@ export function beginStrategy(user: string, body: any) {
     deadline,
     JSON.stringify(snapshot),
   );
-  return present(row("SELECT * FROM strategy_attempts WHERE id=?", id)!);
+  return present(
+    (await row("SELECT * FROM strategy_attempts WHERE id=?", id))!,
+  );
 }
-export function saveStrategy(
+export async function saveStrategy(
   user: string,
   id: string,
   answers: any,
   timings: any,
 ) {
-  const a = row(
+  const a = await row(
     "SELECT * FROM strategy_attempts WHERE id=? AND user_id=?",
     id,
     user,
@@ -184,7 +183,7 @@ export function saveStrategy(
   if (!a) throw Error("Attempt not found.");
   if (a.submitted_at) return present(a);
   if (a.deadline && Date.parse(a.deadline) <= Date.now())
-    return submitStrategy(user, id);
+    return await submitStrategy(user, id);
   const snapshot = JSON.parse(a.snapshot),
     valid: Record<string, string> = {},
     times: Record<string, number> = {},
@@ -204,17 +203,19 @@ export function saveStrategy(
     times[q.id] = Math.min(budget, Math.max(old[q.id] || 0, safe));
     budget -= times[q.id];
   }
-  run(
+  await run(
     "UPDATE strategy_attempts SET answers=?,timings=? WHERE id=?",
     JSON.stringify(valid),
     JSON.stringify(times),
     id,
   );
-  return present(row("SELECT * FROM strategy_attempts WHERE id=?", id)!);
+  return present(
+    (await row("SELECT * FROM strategy_attempts WHERE id=?", id))!,
+  );
 }
-export function submitStrategy(user: string, id: string) {
-  return transaction(() => {
-    const a = row(
+export async function submitStrategy(user: string, id: string) {
+  return await transaction(async () => {
+    const a = await row(
       "SELECT * FROM strategy_attempts WHERE id=? AND user_id=?",
       id,
       user,
@@ -263,7 +264,7 @@ export function submitStrategy(user: string, id: string) {
             ? "Strategy knowledge only — not an assessed Writing or Speaking performance"
             : "Short strategy practice — not an IELTS band",
     };
-    run(
+    await run(
       "UPDATE strategy_attempts SET submitted_at=?,result=? WHERE id=?",
       new Date().toISOString(),
       JSON.stringify(result),
@@ -273,7 +274,7 @@ export function submitStrategy(user: string, id: string) {
       (q: any) => !q.correct || (a.kind === "trap" && !q.trapCorrect),
     )) {
       const trapOnly = q.correct && a.kind === "trap";
-      run(
+      await run(
         "INSERT INTO mistakes(id,user_id,question_id,activity_id,question,answer,correction,explanation,category,due,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,activity_id,question_id) DO UPDATE SET answer=excluded.answer,repetitions=repetitions+1,status='Learning',due=excluded.due",
         randomUUID(),
         user,
@@ -288,18 +289,19 @@ export function submitStrategy(user: string, id: string) {
         new Date().toISOString(),
       );
     }
-    return present(row("SELECT * FROM strategy_attempts WHERE id=?", id)!);
+    return present(
+      (await row("SELECT * FROM strategy_attempts WHERE id=?", id))!,
+    );
   });
 }
-export function observations(user: string): Observation[] {
+export async function observations(user: string): Promise<Observation[]> {
   const result: Observation[] = [];
   const legacyTimes = new Map(
-    rows("SELECT * FROM question_timings WHERE user_id=?", user).map((t) => [
-      t.attempt_id,
-      JSON.parse(t.data),
-    ]),
+    (await rows("SELECT * FROM question_timings WHERE user_id=?", user)).map(
+      (t) => [t.attempt_id, JSON.parse(t.data)],
+    ),
   );
-  for (const a of rows(
+  for (const a of await rows(
     "SELECT * FROM attempts WHERE user_id=? AND submitted_at IS NOT NULL ORDER BY submitted_at",
     user,
   )) {
@@ -319,7 +321,7 @@ export function observations(user: string): Observation[] {
       });
     }
   }
-  for (const a of rows(
+  for (const a of await rows(
     "SELECT * FROM strategy_attempts WHERE user_id=? AND kind=? AND submitted_at IS NOT NULL ORDER BY submitted_at",
     user,
     "strategy",
@@ -348,43 +350,54 @@ export function observations(user: string): Observation[] {
       return { ...o, fresh };
     });
 }
-export function strategyState(user: string) {
-  seed();
-  for (const a of rows(
+export async function strategyState(user: string) {
+  await seed();
+  for (const a of await rows(
     "SELECT id FROM strategy_attempts WHERE user_id=? AND submitted_at IS NULL AND deadline IS NOT NULL AND deadline<=?",
     user,
     new Date().toISOString(),
   ))
-    submitStrategy(user, a.id);
-  const obs = observations(user);
+    await submitStrategy(user, a.id);
+  const obs = await observations(user);
   const byType = aggregate(obs);
   return {
     analytics: byType,
-    attempts: rows(
-      "SELECT * FROM strategy_attempts WHERE user_id=? ORDER BY started_at DESC",
-      user,
+    attempts: (
+      await rows(
+        "SELECT * FROM strategy_attempts WHERE user_id=? ORDER BY started_at DESC",
+        user,
+      )
     ).map(present),
-    progress: rows("SELECT * FROM strategy_progress WHERE user_id=?", user),
-    lessonProgress: rows(
+    progress: await rows(
+      "SELECT * FROM strategy_progress WHERE user_id=?",
+      user,
+    ),
+    lessonProgress: await rows(
       "SELECT * FROM course_progress_v2 WHERE user_id=?",
       user,
     ),
-    micros: rows(
+    micros: await rows(
       "SELECT id,strategy_id,title,reason,source_attempt,created_at FROM micro_lessons WHERE user_id=? ORDER BY created_at DESC",
       user,
     ),
-    scenarios: rows(
-      "SELECT * FROM score_planning_scenarios WHERE user_id=? ORDER BY created_at DESC",
-      user,
+    scenarios: (
+      await rows(
+        "SELECT * FROM score_planning_scenarios WHERE user_id=? ORDER BY created_at DESC",
+        user,
+      )
     ).map((s) => ({ ...s, data: JSON.parse(s.data) })),
-    coaching: rows(
-      "SELECT * FROM coaching_responses WHERE user_id=? ORDER BY updated_at DESC",
-      user,
+    coaching: (
+      await rows(
+        "SELECT * FROM coaching_responses WHERE user_id=? ORDER BY updated_at DESC",
+        user,
+      )
     ).map((s) => ({ ...s, feedback: JSON.parse(s.feedback) })),
-    trapSummary: rows(
-      "SELECT result FROM strategy_attempts WHERE user_id=? AND kind=? AND submitted_at IS NOT NULL",
-      user,
-      "trap",
+    trapSummary: (
+      await rows(
+        "SELECT result FROM strategy_attempts WHERE user_id=? AND kind=? AND submitted_at IS NOT NULL",
+        user,
+        "trap",
+      )
     ).reduce(
       (s, a) => {
         const r = JSON.parse(a.result);
@@ -427,13 +440,13 @@ export function catalog() {
     },
   };
 }
-export function explanation(
+export async function explanation(
   user: string,
   id: string,
   questionId: string,
   legacy = false,
 ) {
-  const a = row(
+  const a = await row(
     `SELECT * FROM ${legacy ? "attempts" : "strategy_attempts"} WHERE id=? AND user_id=?`,
     id,
     user,
@@ -459,17 +472,17 @@ export function explanation(
     };
   return explainQuestion(q, legacy ? a.activity_id : undefined);
 }
-export function generateMicro(user: string, sourceAttempt?: string) {
-  assertCoachingAllowed(user);
-  const all = observations(user);
+export async function generateMicro(user: string, sourceAttempt?: string) {
+  await assertCoachingAllowed(user);
+  const all = await observations(user);
   let missed = all.filter((o) => !o.correct);
   if (sourceAttempt) {
-    const legacy = row(
+    const legacy = await row(
         "SELECT * FROM attempts WHERE id=? AND user_id=? AND submitted_at IS NOT NULL",
         sourceAttempt,
         user,
       ),
-      modern = row(
+      modern = await row(
         "SELECT * FROM strategy_attempts WHERE id=? AND user_id=? AND submitted_at IS NOT NULL",
         sourceAttempt,
         user,
@@ -506,7 +519,7 @@ export function generateMicro(user: string, sourceAttempt?: string) {
   const counts = new Map<string, number>();
   for (const m of missed)
     counts.set(m.strategyId, (counts.get(m.strategyId) || 0) + 1);
-  const already = rows(
+  const already = await rows(
     "SELECT strategy_id FROM micro_lessons WHERE user_id=?",
     user,
   );
@@ -535,7 +548,7 @@ export function generateMicro(user: string, sourceAttempt?: string) {
   }));
   const id = randomUUID(),
     reason = `Selected from ${count} recorded error${count === 1 ? "" : "s"} in ${pattern.name}; repeated errors increase revision priority.`;
-  run(
+  await run(
     "INSERT INTO micro_lessons(id,user_id,strategy_id,title,reason,source_attempt,snapshot,created_at) VALUES (?,?,?,?,?,?,?,?)",
     id,
     user,
@@ -552,8 +565,8 @@ export function generateMicro(user: string, sourceAttempt?: string) {
   );
   return { id, strategyId, title: blueprint.title, reason };
 }
-export function getMicro(user: string, id: string) {
-  const m = row(
+export async function getMicro(user: string, id: string) {
+  const m = await row(
     "SELECT * FROM micro_lessons WHERE id=? AND user_id=?",
     id,
     user,
@@ -562,13 +575,13 @@ export function getMicro(user: string, id: string) {
   const { questions, ...lesson } = JSON.parse(m.snapshot);
   return { ...m, snapshot: undefined, lesson };
 }
-export function lessonStep(
+export async function lessonStep(
   user: string,
   day: number,
   stage: string,
   body: string,
 ) {
-  assertCoachingAllowed(user);
+  await assertCoachingAllowed(user);
   if (
     !Number.isInteger(day) ||
     day < 1 ||
@@ -598,60 +611,62 @@ export function lessonStep(
       "revision",
     ])
       if (
-        !row(
+        !(await row(
           "SELECT day FROM course_progress_v2 WHERE user_id=? AND day=? AND stage=?",
           user,
           day,
           required,
-        )
+        ))
       )
         throw Error("Complete the lesson path and review before finishing.");
     if (body.trim().length < 20)
       throw Error("Write a reflection of at least 20 characters.");
     for (const phase of ["guided", "independent", "timed"]) {
-      const a = rows(
-        "SELECT result FROM strategy_attempts WHERE user_id=? AND strategy_id=? AND day=? AND phase=? AND submitted_at IS NOT NULL",
-        user,
-        l.strategyId,
-        day,
-        phase,
+      const a = (
+        await rows(
+          "SELECT result FROM strategy_attempts WHERE user_id=? AND strategy_id=? AND day=? AND phase=? AND submitted_at IS NOT NULL",
+          user,
+          l.strategyId,
+          day,
+          phase,
+        )
       ).map((x) => JSON.parse(x.result));
       if (!a.some((r) => r.answered === r.total))
         throw Error(`Complete all questions in ${phase} practice.`);
     }
     for (const foundation of ["G01", "V01"])
       if (
-        !row(
+        !(await row(
           "SELECT id FROM strategy_attempts WHERE user_id=? AND day=? AND strategy_id=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
           user,
           day,
           foundation,
-        )
+        ))
       )
         throw Error(
           "Complete both grammar and vocabulary foundation practice for this day.",
         );
     const secondary = l.skill === "Reading" ? "Listening" : "Reading";
     if (
-      !row(
+      !(await row(
         "SELECT id FROM attempts WHERE user_id=? AND day=? AND skill=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
         user,
         day,
         secondary,
-      )
+      ))
     )
       throw Error("Complete the secondary-skill practice for this day.");
     if (
-      !row(
+      !(await row(
         "SELECT id FROM writing WHERE user_id=? AND day=? AND submitted_at IS NOT NULL",
         user,
         day,
-      ) &&
-      !row(
+      )) &&
+      !(await row(
         "SELECT id FROM recordings WHERE user_id=? AND day=? AND duration>=20",
         user,
         day,
-      )
+      ))
     )
       throw Error(
         "Add a submitted writing response or a 20-second speaking recording for this day.",
@@ -664,25 +679,28 @@ export function lessonStep(
         "listening-1",
       ])
         if (
-          !row(
+          !(await row(
             "SELECT id FROM attempts WHERE user_id=? AND activity_id=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
             user,
             activity,
-          )
+          ))
         )
           throw Error("Finish all four objective diagnostic components first.");
       if (
-        !row(
+        !(await row(
           "SELECT id FROM writing WHERE user_id=? AND submitted_at IS NOT NULL",
           user,
-        ) ||
-        !row("SELECT id FROM recordings WHERE user_id=? AND duration>=20", user)
+        )) ||
+        !(await row(
+          "SELECT id FROM recordings WHERE user_id=? AND duration>=20",
+          user,
+        ))
       )
         throw Error("Finish both diagnostic production components first.");
     }
   } else if (body.trim().length < 10)
     throw Error("Add a short note showing what you learned.");
-  run(
+  await run(
     "INSERT INTO course_progress_v2(user_id,day,stage,body,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(user_id,day,stage) DO UPDATE SET body=excluded.body,updated_at=excluded.updated_at",
     user,
     day,
@@ -692,7 +710,7 @@ export function lessonStep(
   );
   return { ok: true };
 }
-export function saveScenario(user: string, input: any) {
+export async function saveScenario(user: string, input: any) {
   const result = scorePlan(input);
   const raw = input.raw || {};
   for (const skill of ["Listening", "Reading"] as const)
@@ -710,7 +728,7 @@ export function saveScenario(user: string, input: any) {
       };
     }
   const id = randomUUID();
-  run(
+  await run(
     "INSERT INTO score_planning_scenarios(id,user_id,data,created_at) VALUES (?,?,?,?)",
     id,
     user,
@@ -719,8 +737,12 @@ export function saveScenario(user: string, input: any) {
   );
   return { id, ...result };
 }
-export function strategyReport(user: string, id: string, legacy: boolean) {
-  const a = row(
+export async function strategyReport(
+  user: string,
+  id: string,
+  legacy: boolean,
+) {
+  const a = await row(
     `SELECT * FROM ${legacy ? "attempts" : "strategy_attempts"} WHERE id=? AND user_id=?`,
     id,
     user,
@@ -728,8 +750,14 @@ export function strategyReport(user: string, id: string, legacy: boolean) {
   if (!a || !a.submitted_at)
     throw Error("Submit an owned attempt before requesting a strategy report.");
   const result = JSON.parse(a.result),
-    grouped: Record<string, { name: string; correct: number; total: number }> =
-      {};
+    grouped: Record<
+      string,
+      {
+        name: string;
+        correct: number;
+        total: number;
+      }
+    > = {};
   for (const q of result.review) {
     const m = legacy ? legacyMetadata(a.activity_id, q) : q;
     const p = patterns.find((p) => p.id === m.patternId);
@@ -772,17 +800,23 @@ export function strategyReport(user: string, id: string, legacy: boolean) {
       "Keep the core syllabus. Add 10 minutes of question-type revision within the next day’s review allocation.",
   };
 }
-export function saveLegacyTiming(user: string, id: string, times: any) {
-  const a = row("SELECT * FROM attempts WHERE id=? AND user_id=?", id, user);
+export async function saveLegacyTiming(user: string, id: string, times: any) {
+  const a = await row(
+    "SELECT * FROM attempts WHERE id=? AND user_id=?",
+    id,
+    user,
+  );
   if (!a) throw Error("Attempt not found.");
   if (a.submitted_at) return { ok: true };
   const questions = JSON.parse(a.snapshot).questions,
     valid: Record<string, number> = {},
     previous = JSON.parse(
-      row(
-        "SELECT data FROM question_timings WHERE attempt_id=? AND user_id=?",
-        id,
-        user,
+      (
+        await row(
+          "SELECT data FROM question_timings WHERE attempt_id=? AND user_id=?",
+          id,
+          user,
+        )
       )?.data || "{}",
     );
   let budget = Math.floor((Date.now() - Date.parse(a.started_at)) / 1000);
@@ -797,7 +831,7 @@ export function saveLegacyTiming(user: string, id: string, times: any) {
     );
     budget -= valid[q.id];
   }
-  run(
+  await run(
     "INSERT INTO question_timings(user_id,attempt_id,data) VALUES (?,?,?) ON CONFLICT(user_id,attempt_id) DO UPDATE SET data=excluded.data",
     user,
     id,

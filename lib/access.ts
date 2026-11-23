@@ -35,7 +35,7 @@ export function validCredentials(
   );
   return userMatches && passwordMatches;
 }
-function previousUser(token?: string) {
+async function previousUser(token?: string) {
   if (!token) return null;
   const [id, signature] = token.split(".");
   if (
@@ -49,37 +49,40 @@ function previousUser(token?: string) {
     .update(id)
     .digest("hex");
   return timingSafeEqual(Buffer.from(expected), Buffer.from(signature)) &&
-    row("SELECT id FROM users WHERE id=?", id)
+    (await row("SELECT id FROM users WHERE id=?", id))
     ? id
     : null;
 }
-export function createLogin(
+export async function createLogin(
   username: string,
   password: string,
   legacyCookie?: string,
   env: Record<string, string | undefined> = process.env,
 ) {
   if (!validCredentials(username, password, env)) return null;
-  return transaction(() => {
+  return await transaction(async () => {
     const name = env.LOGIN_USERNAME || "TTH";
-    const account = row("SELECT * FROM login_accounts WHERE username=?", name);
+    const account = await row(
+      "SELECT * FROM login_accounts WHERE username=?",
+      name,
+    );
     const user =
       account?.user_id ||
-      previousUser(legacyCookie) ||
+      (await previousUser(legacyCookie)) ||
       randomBytes(24).toString("hex");
-    ensureUser(user);
-    run(
+    await ensureUser(user);
+    await run(
       "INSERT INTO login_accounts(username,user_id) VALUES (?,?) ON CONFLICT(username) DO UPDATE SET user_id=excluded.user_id",
       name,
       user,
     );
     const token = randomBytes(32).toString("hex"),
       expires = new Date(Date.now() + LOGIN_DAYS * 86400000).toISOString();
-    run(
+    await run(
       "DELETE FROM login_sessions WHERE expires_at<=?",
       new Date().toISOString(),
     );
-    run(
+    await run(
       "INSERT INTO login_sessions(token_hash,user_id,expires_at) VALUES (?,?,?)",
       hash(token),
       user,
@@ -88,16 +91,19 @@ export function createLogin(
     return { token, user, username: name, expires };
   });
 }
-export function sessionUser(token?: string) {
+export async function sessionUser(token?: string) {
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   return (
-    (row(
-      "SELECT user_id FROM login_sessions WHERE token_hash=? AND expires_at>?",
-      hash(token),
-      new Date().toISOString(),
+    ((
+      await row(
+        "SELECT user_id FROM login_sessions WHERE token_hash=? AND expires_at>?",
+        hash(token),
+        new Date().toISOString(),
+      )
     )?.user_id as string | null) || null
   );
 }
-export function revokeLogin(token?: string) {
-  if (token) run("DELETE FROM login_sessions WHERE token_hash=?", hash(token));
+export async function revokeLogin(token?: string) {
+  if (token)
+    await run("DELETE FROM login_sessions WHERE token_hash=?", hash(token));
 }

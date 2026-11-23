@@ -9,23 +9,23 @@ export class ChatError extends Error {
     super(message);
   }
 }
-function migratePreviousChat(user: string) {
+async function migratePreviousChat(user: string) {
   if (
-    !row(
+    !(await row(
       "SELECT id FROM tutor_messages WHERE user_id=? AND chat_id IS NULL LIMIT 1",
       user,
-    )
+    ))
   )
     return;
-  transaction(() => {
-    const previous = rows(
+  await transaction(async () => {
+    const previous = await rows(
       "SELECT * FROM tutor_messages WHERE user_id=? AND chat_id IS NULL ORDER BY created_at,rowid",
       user,
     );
     if (!previous.length) return;
     const id = randomUUID(),
       now = new Date().toISOString();
-    run(
+    await run(
       "INSERT INTO tutor_chats(id,user_id,title,created_at,updated_at) VALUES (?,?,?,?,?)",
       id,
       user,
@@ -33,15 +33,15 @@ function migratePreviousChat(user: string) {
       previous[0].created_at || now,
       previous.at(-1)!.created_at || now,
     );
-    run(
+    await run(
       "UPDATE tutor_messages SET chat_id=? WHERE user_id=? AND chat_id IS NULL",
       id,
       user,
     );
   });
 }
-function getChat(user: string, id: string) {
-  const chat = row(
+async function getChat(user: string, id: string) {
+  const chat = await row(
     "SELECT * FROM tutor_chats WHERE id=? AND user_id=?",
     id,
     user,
@@ -53,18 +53,20 @@ function publicChat(c: Record<string, any>): Record<string, any> {
   const { request_token, busy_until, ...rest } = c;
   return { ...rest, busy: !!busy_until && Date.parse(busy_until) > Date.now() };
 }
-export function listTutorChats(user: string) {
-  migratePreviousChat(user);
-  return rows(
-    "SELECT c.*, (SELECT COUNT(*) FROM tutor_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS message_count FROM tutor_chats c WHERE c.user_id=? ORDER BY c.updated_at DESC,c.rowid DESC",
-    user,
+export async function listTutorChats(user: string) {
+  await migratePreviousChat(user);
+  return (
+    await rows(
+      "SELECT c.*, (SELECT COUNT(*) FROM tutor_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS message_count FROM tutor_chats c WHERE c.user_id=? ORDER BY c.updated_at DESC,c.rowid DESC",
+      user,
+    )
   ).map(publicChat);
 }
-export function createTutorChat(user: string) {
-  migratePreviousChat(user);
+export async function createTutorChat(user: string) {
+  await migratePreviousChat(user);
   const id = randomUUID(),
     now = new Date().toISOString();
-  run(
+  await run(
     "INSERT INTO tutor_chats(id,user_id,title,created_at,updated_at) VALUES (?,?,?,?,?)",
     id,
     user,
@@ -72,11 +74,11 @@ export function createTutorChat(user: string) {
     now,
     now,
   );
-  return publicChat(getChat(user, id));
+  return publicChat(await getChat(user, id));
 }
-export function readTutorChat(user: string, id: string) {
-  const chat = getChat(user, id);
-  const messages = rows(
+export async function readTutorChat(user: string, id: string) {
+  const chat = await getChat(user, id);
+  const messages = await rows(
     "SELECT id,role,body,created_at FROM tutor_messages WHERE user_id=? AND chat_id=? ORDER BY rowid",
     user,
     id,
@@ -89,9 +91,9 @@ export function readTutorChat(user: string, id: string) {
   );
   return { chat: publicChat(chat), messages, memory: memory.summary };
 }
-export function updateTutorChat(user: string, id: string, changes: any) {
-  return transaction(() => {
-    const chat = getChat(user, id);
+export async function updateTutorChat(user: string, id: string, changes: any) {
+  return await transaction(async () => {
+    const chat = await getChat(user, id);
     if (chat.busy_until && Date.parse(chat.busy_until) > Date.now())
       throw new ChatError(
         "This chat is generating a reply. Wait for it to finish before editing.",
@@ -126,7 +128,7 @@ export function updateTutorChat(user: string, id: string, changes: any) {
       next.window_tokens = changes.windowTokens;
     }
     buildChatMemory([], next.draft, next.context_notes, next.window_tokens);
-    run(
+    await run(
       "UPDATE tutor_chats SET title=?,context_notes=?,window_tokens=?,draft=?,updated_at=? WHERE id=? AND user_id=?",
       next.title,
       next.context_notes,
@@ -136,20 +138,24 @@ export function updateTutorChat(user: string, id: string, changes: any) {
       id,
       user,
     );
-    return readTutorChat(user, id);
+    return await readTutorChat(user, id);
   });
 }
-export function prepareTutorTurn(user: string, id: string, input: string) {
+export async function prepareTutorTurn(
+  user: string,
+  id: string,
+  input: string,
+) {
   if (!input.trim() || input.length > 10000)
     throw new ChatError("Enter a message of 1–10,000 characters.");
-  return transaction(() => {
-    const chat = getChat(user, id);
+  return await transaction(async () => {
+    const chat = await getChat(user, id);
     if (chat.busy_until && Date.parse(chat.busy_until) > Date.now())
       throw new ChatError(
         "A reply is already being generated in this chat.",
         409,
       );
-    const messages = rows(
+    const messages = await rows(
       "SELECT role,body FROM tutor_messages WHERE user_id=? AND chat_id=? ORDER BY rowid",
       user,
       id,
@@ -161,7 +167,7 @@ export function prepareTutorTurn(user: string, id: string, input: string) {
       chat.window_tokens,
     );
     const token = randomUUID();
-    run(
+    await run(
       "UPDATE tutor_chats SET request_token=?,busy_until=?,draft=? WHERE id=? AND user_id=?",
       token,
       new Date(Date.now() + 90000).toISOString(),
@@ -178,13 +184,13 @@ export function prepareTutorTurn(user: string, id: string, input: string) {
     };
   });
 }
-export function finishTutorTurn(
+export async function finishTutorTurn(
   user: string,
-  turn: ReturnType<typeof prepareTutorTurn>,
+  turn: Awaited<ReturnType<typeof prepareTutorTurn>>,
   answer: string,
 ) {
-  transaction(() => {
-    const chat = getChat(user, turn.chatId);
+  await transaction(async () => {
+    const chat = await getChat(user, turn.chatId);
     if (chat.request_token !== turn.token)
       throw new ChatError(
         "This reply expired. Please send your message again.",
@@ -195,7 +201,7 @@ export function finishTutorTurn(
       ["user", turn.input],
       ["assistant", answer],
     ])
-      run(
+      await run(
         "INSERT INTO tutor_messages(id,user_id,chat_id,role,body,created_at) VALUES (?,?,?,?,?,?)",
         randomUUID(),
         user,
@@ -208,7 +214,7 @@ export function finishTutorTurn(
       chat.title === "New chat"
         ? turn.input.replace(/\s+/g, " ").trim().slice(0, 60)
         : chat.title;
-    run(
+    await run(
       "UPDATE tutor_chats SET title=?,draft=?,request_token=NULL,busy_until=NULL,updated_at=? WHERE id=? AND user_id=?",
       title,
       chat.draft === turn.input ? "" : chat.draft,
@@ -218,11 +224,11 @@ export function finishTutorTurn(
     );
   });
 }
-export function releaseTutorTurn(
+export async function releaseTutorTurn(
   user: string,
-  turn: ReturnType<typeof prepareTutorTurn>,
+  turn: Awaited<ReturnType<typeof prepareTutorTurn>>,
 ) {
-  run(
+  await run(
     "UPDATE tutor_chats SET request_token=NULL,busy_until=NULL WHERE id=? AND user_id=? AND request_token=?",
     turn.chatId,
     user,

@@ -8,23 +8,23 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const user = await currentUser();
-    assertCoachingAllowed(user);
+    await assertCoachingAllowed(user);
     const params = new URL(req.url).searchParams,
       kind = params.get("kind") || "",
       id = params.get("sourceId") || "",
       questionId = params.get("questionId") || "";
-    reviewSubject(user, kind, id, questionId);
+    await reviewSubject(user, kind, id, questionId);
     return Response.json(
       {
         ai: aiStatus(),
         review:
-          row(
+          (await row(
             "SELECT response,provider,model,created_at FROM ai_reviews WHERE user_id=? AND source_kind=? AND source_id=? AND question_id=?",
             user,
             kind,
             id,
             questionId,
-          ) || null,
+          )) || null,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );

@@ -12,10 +12,12 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const user = await currentUser();
-    assertCoachingAllowed(user);
+    await assertCoachingAllowed(user);
     const id = new URL(req.url).searchParams.get("id");
     return Response.json(
-      id ? readTutorChat(user, id) : { chats: listTutorChats(user) },
+      id
+        ? await readTutorChat(user, id)
+        : { chats: await listTutorChats(user) },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (e) {
@@ -38,13 +40,13 @@ export async function POST(req: Request) {
     if (Number(req.headers.get("content-length") || 0) > 40000)
       throw new ChatError("Request too large.");
     const user = await currentUser();
-    assertCoachingAllowed(user);
+    await assertCoachingAllowed(user);
     const body = await req.json();
     if (body.action === "create")
-      return Response.json({ chat: createTutorChat(user) });
+      return Response.json({ chat: await createTutorChat(user) });
     if (body.action === "update")
       return Response.json(
-        updateTutorChat(user, String(body.id || ""), body.changes || {}),
+        await updateTutorChat(user, String(body.id || ""), body.changes || {}),
       );
     throw new ChatError("Unknown chat action.");
   } catch (e) {

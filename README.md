@@ -1,5 +1,7 @@
 # IELTS Sprint 30
 
+**Vercel deployment:** Follow [VERCEL-DEPLOY.md](VERCEL-DEPLOY.md). Vercel requires a connected Turso database for durable sessions and saved progress. A local SQLite file or `/tmp` cannot provide this.
+
 **V2 strategy upgrade:** See [V2-UPGRADE.md](V2-UPGRADE.md) for the new decoder, playbook, guided/timed strategy engine, trap trainer, adaptive micro-lessons, score planning, revised course, data-preservation notes and remaining content scope. The baseline V1 documentation below is retained for context.
 
 A working first release of a single-learner IELTS Academic study application. Built with Next.js App Router, TypeScript, React, Lucide icons, Recharts, and durable SQLite storage. This implements the vertical-slice option in the brief. **It is not the complete content library or a production SaaS release.**

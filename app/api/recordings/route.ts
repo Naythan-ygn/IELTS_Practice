@@ -1,19 +1,26 @@
 import { currentUser, checkOrigin, AuthenticationError } from "@/lib/auth";
-import { row, run, dataDir } from "@/lib/db";
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
-import path from "node:path";
+import { row, run, transaction } from "@/lib/db";
+import {
+  saveRecordingAudio,
+  readRecordingAudio,
+  maxRecordingBytes,
+} from "@/lib/recording-storage";
 import { randomUUID } from "node:crypto";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 export async function POST(req: Request) {
   try {
     checkOrigin(req);
     const user = await currentUser();
-    if (Number(req.headers.get("content-length") || 0) > 20_000_000)
-      throw Error("Maximum recording size is 20 MB.");
+    const maxBytes = maxRecordingBytes();
+    if (Number(req.headers.get("content-length") || 0) > maxBytes + 100_000)
+      throw Error(`Maximum recording size is ${maxBytes / 1_000_000} MB.`);
     const form = await req.formData();
     const audio = form.get("audio");
-    if (!(audio instanceof File) || audio.size < 100 || audio.size > 20_000_000)
-      throw Error("Please provide a valid recording under 20 MB.");
+    if (!(audio instanceof File) || audio.size < 100 || audio.size > maxBytes)
+      throw Error(
+        `Please provide a valid recording under ${maxBytes / 1_000_000} MB.`,
+      );
     if (!/^(audio\/(webm|ogg|mp4|wav)|video\/webm)/.test(audio.type))
       throw Error("Unsupported audio format");
     const duration = Number(form.get("duration"));
@@ -24,23 +31,22 @@ export async function POST(req: Request) {
       throw Error("Invalid course day.");
     const id = randomUUID(),
       file = `${id}.audio`;
-    mkdirSync(path.join(dataDir, "recordings"), { recursive: true });
-    writeFileSync(
-      path.join(dataDir, "recordings", file),
-      Buffer.from(await audio.arrayBuffer()),
-    );
-    run(
-      "INSERT INTO recordings(id,user_id,prompt,mime,file,transcript,duration,created_at,day) VALUES (?,?,?,?,?,?,?,?,?)",
-      id,
-      user,
-      String(form.get("prompt") || "Speaking practice").slice(0, 1000),
-      audio.type,
-      file,
-      String(form.get("transcript") || "").slice(0, 15000),
-      Math.round(duration),
-      new Date().toISOString(),
-      day,
-    );
+    const bytes = Buffer.from(await audio.arrayBuffer());
+    await transaction(async () => {
+      await run(
+        "INSERT INTO recordings(id,user_id,prompt,mime,file,transcript,duration,created_at,day) VALUES (?,?,?,?,?,?,?,?,?)",
+        id,
+        user,
+        String(form.get("prompt") || "Speaking practice").slice(0, 1000),
+        audio.type,
+        file,
+        String(form.get("transcript") || "").slice(0, 15000),
+        Math.round(duration),
+        new Date().toISOString(),
+        day,
+      );
+      await saveRecordingAudio(id, file, bytes);
+    });
     return Response.json({ id });
   } catch (e) {
     return Response.json(
@@ -52,23 +58,20 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   try {
     const user = await currentUser();
-    const a = row(
+    const a = await row(
       "SELECT * FROM recordings WHERE id=? AND user_id=?",
       new URL(req.url).searchParams.get("id") || "",
       user,
     );
     if (!a) return new Response("Recording not found", { status: 404 });
     try {
-      return new Response(
-        readFileSync(path.join(dataDir, "recordings", a.file)),
-        {
-          headers: {
-            "Content-Type": a.mime,
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-          },
+      return new Response(await readRecordingAudio(a.id, a.file), {
+        headers: {
+          "Content-Type": a.mime,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
         },
-      );
+      });
     } catch {
       return new Response("Recording file unavailable", { status: 404 });
     }

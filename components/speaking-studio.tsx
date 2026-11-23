@@ -275,6 +275,11 @@ export function SpeakingStudio({
                 onClick={async () => {
                   setSaving(true);
                   try {
+                    const maxBytes = data.maxRecordingBytes || 20_000_000;
+                    if (blob!.size > maxBytes)
+                      throw Error(
+                        `This recording is too large to save. Please record a shorter answer (maximum ${maxBytes / 1_000_000} MB).`,
+                      );
                     const form = new FormData();
                     form.set("audio", blob!, "response.webm");
                     form.set("duration", String(seconds));

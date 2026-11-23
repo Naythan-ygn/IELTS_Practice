@@ -20,23 +20,34 @@ export async function POST(req: Request) {
     let result: unknown;
     switch (b.action) {
       case "start":
-        result = startAttempt(user, b.activity, b.mode || "practice", b.day);
+        result = await startAttempt(
+          user,
+          b.activity,
+          b.mode || "practice",
+          b.day,
+        );
         break;
       case "save":
-        result = saveAnswers(user, b.id, b.answers || {}, b.seconds, b.timings);
+        result = await saveAnswers(
+          user,
+          b.id,
+          b.answers || {},
+          b.seconds,
+          b.timings,
+        );
         break;
       case "submit":
-        result = submitAttempt(user, b.id);
+        result = await submitAttempt(user, b.id);
         break;
       case "profile":
-        result = saveProfile(user, b.profile);
+        result = await saveProfile(user, b.profile);
         break;
       case "completeDay":
-        completeDay(user, Number(b.day), String(b.reflection || ""));
+        await completeDay(user, Number(b.day), String(b.reflection || ""));
         result = { ok: true };
         break;
       case "writing":
-        result = saveWriting(
+        result = await saveWriting(
           user,
           b.prompt,
           String(b.body || ""),
@@ -45,7 +56,7 @@ export async function POST(req: Request) {
         );
         break;
       case "reviewWord":
-        reviewWord(user, b.word, b.rating);
+        await reviewWord(user, b.word, b.rating);
         result = { ok: true };
         break;
       case "mistake": {
@@ -57,7 +68,7 @@ export async function POST(req: Request) {
           throw Error("Invalid status");
         const interval =
           b.status === "Mastered" ? 14 : b.status === "Understood" ? 4 : 1;
-        run(
+        await run(
           "UPDATE mistakes SET status=?,due=? WHERE id=? AND user_id=?",
           b.status,
           new Date(Date.now() + interval * 86400000).toISOString(),

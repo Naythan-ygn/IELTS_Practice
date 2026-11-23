@@ -13,13 +13,19 @@ import { assertCoachingAllowed } from "@/lib/strategy-service";
 import { aiStatus, requestAI, AIError } from "@/lib/ai";
 import { reviewSubject, saveAIReview } from "@/lib/ai-review";
 export const runtime = "nodejs";
-const limits = new Map<string, { count: number; until: number }>();
+const limits = new Map<
+  string,
+  {
+    count: number;
+    until: number;
+  }
+>();
 export async function POST(req: Request) {
   try {
     checkOrigin(req);
     const user = await currentUser();
-    const s = state(user);
-    assertCoachingAllowed(user);
+    const s = await state(user);
+    await assertCoachingAllowed(user);
     if (s.attempts.some((a) => a.mode === "strict" && !a.submitted_at))
       return Response.json(
         { error: "Finish your strict checkpoint before using coaching." },
@@ -86,11 +92,11 @@ export async function POST(req: Request) {
       const kind = b.recordingId ? "recording" : b.attemptSource;
       const id = String(b.recordingId || b.attemptId);
       const questionId = String(b.questionId || "");
-      const review = reviewSubject(user, kind, id, questionId);
+      const review = await reviewSubject(user, kind, id, questionId);
       subject = { kind, id, questionId, title: review.title };
       text = review.input;
     } else if (b.writingId) {
-      writing = row(
+      writing = await row(
         "SELECT * FROM writing WHERE id=? AND user_id=? AND submitted_at IS NOT NULL",
         String(b.writingId),
         user,
@@ -103,9 +109,11 @@ export async function POST(req: Request) {
     if (!text.trim()) throw Error("Enter a question.");
     const turn =
       !subject && !writing
-        ? prepareTutorTurn(
+        ? await prepareTutorTurn(
             user,
-            b.chatId ? String(b.chatId) : String(createTutorChat(user).id),
+            b.chatId
+              ? String(b.chatId)
+              : String((await createTutorChat(user)).id),
             text,
           )
         : null;
@@ -118,7 +126,7 @@ export async function POST(req: Request) {
       const { answer } = feedback;
       const now = new Date().toISOString();
       if (subject)
-        saveAIReview(
+        await saveAIReview(
           user,
           subject.kind,
           subject.id,
@@ -126,7 +134,7 @@ export async function POST(req: Request) {
           feedback,
         );
       else if (writing)
-        run(
+        await run(
           "UPDATE writing SET feedback=? WHERE id=? AND body=? AND submitted_at IS NOT NULL",
           JSON.stringify({
             text: answer,
@@ -138,13 +146,13 @@ export async function POST(req: Request) {
           writing.id,
           writing.body,
         );
-      else if (turn) finishTutorTurn(user, turn, answer);
+      else if (turn) await finishTutorTurn(user, turn, answer);
       return Response.json({
         ...feedback,
         ...(turn ? { chatId: turn.chatId, memory: turn.memory } : {}),
       });
     } finally {
-      if (turn) releaseTutorTurn(user, turn);
+      if (turn) await releaseTutorTurn(user, turn);
     }
   } catch (e) {
     return Response.json(

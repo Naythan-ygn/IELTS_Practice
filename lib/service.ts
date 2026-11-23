@@ -1,3 +1,4 @@
+import { maxRecordingBytes } from "./recording-storage";
 import { randomUUID } from "node:crypto";
 import { activities, course, words, writingPrompts } from "./content";
 import { row, rows, run, transaction } from "./db";
@@ -14,13 +15,13 @@ export function today() {
     day: "2-digit",
   }).format(new Date());
 }
-export function ensureUser(id: string) {
-  run("INSERT OR IGNORE INTO users(id) VALUES (?)", id);
-  if (!row("SELECT user_id FROM profiles WHERE user_id=?", id)) {
+export async function ensureUser(id: string) {
+  await run("INSERT OR IGNORE INTO users(id) VALUES (?)", id);
+  if (!(await row("SELECT user_id FROM profiles WHERE user_id=?", id))) {
     const start = today();
     const exam = new Date(`${start}T12:00:00Z`);
     exam.setUTCDate(exam.getUTCDate() + 30);
-    run(
+    await run(
       "INSERT INTO profiles(user_id,data) VALUES (?,?)",
       id,
       JSON.stringify({
@@ -39,68 +40,76 @@ export function ensureUser(id: string) {
     );
   }
 }
-export function profile(id: string) {
-  return JSON.parse(row("SELECT data FROM profiles WHERE user_id=?", id)!.data);
+export async function profile(id: string) {
+  return JSON.parse(
+    (await row("SELECT data FROM profiles WHERE user_id=?", id))!.data,
+  );
 }
-function publicAttempt(a: Record<string, any>): Record<string, any> {
+async function publicAttempt(
+  a: Record<string, any>,
+): Promise<Record<string, any>> {
   const { snapshot, ...rest } = a;
   return {
     ...rest,
     timings: JSON.parse(
-      row(
-        "SELECT data FROM question_timings WHERE user_id=? AND attempt_id=?",
-        a.user_id,
-        a.id,
+      (
+        await row(
+          "SELECT data FROM question_timings WHERE user_id=? AND attempt_id=?",
+          a.user_id,
+          a.id,
+        )
       )?.data || "{}",
     ),
     answers: JSON.parse(a.answers),
     result: a.result ? JSON.parse(a.result) : null,
   };
 }
-export function state(id: string) {
-  for (const expired of rows(
+export async function state(id: string) {
+  for (const expired of await rows(
     "SELECT id FROM attempts WHERE user_id=? AND submitted_at IS NULL AND deadline IS NOT NULL AND deadline<=?",
     id,
     new Date().toISOString(),
   ))
-    submitAttempt(id, expired.id);
-  const attempts = rows(
+    await submitAttempt(id, expired.id);
+  const attempts = await rows(
     "SELECT * FROM attempts WHERE user_id=? ORDER BY started_at DESC",
     id,
   );
-  const writing = rows("SELECT * FROM writing WHERE user_id=?", id).map(
+  const writing = (await rows("SELECT * FROM writing WHERE user_id=?", id)).map(
     (w) => ({ ...w, feedback: w.feedback ? JSON.parse(w.feedback) : null }),
   );
-  const tutorChats = listTutorChats(id);
+  const tutorChats = await listTutorChats(id);
   return {
-    profile: profile(id),
+    profile: await profile(id),
     account:
-      row("SELECT username FROM login_accounts WHERE user_id=?", id) || null,
-    strategy: strategyState(id),
-    attempts: attempts.map(publicAttempt),
-    mistakes: rows(
+      (await row("SELECT username FROM login_accounts WHERE user_id=?", id)) ||
+      null,
+    strategy: await strategyState(id),
+    attempts: await Promise.all(attempts.map(publicAttempt)),
+    mistakes: await rows(
       "SELECT * FROM mistakes WHERE user_id=? ORDER BY repetitions DESC,created_at DESC",
       id,
     ),
-    reviews: rows("SELECT * FROM vocabulary_reviews WHERE user_id=?", id),
-    days: rows("SELECT * FROM study_days WHERE user_id=?", id),
+    reviews: await rows("SELECT * FROM vocabulary_reviews WHERE user_id=?", id),
+    days: await rows("SELECT * FROM study_days WHERE user_id=?", id),
     writing,
-    recordings: rows(
+    recordings: await rows(
       "SELECT id,prompt,mime,transcript,duration,created_at,day FROM recordings WHERE user_id=? ORDER BY created_at DESC",
       id,
     ),
-    messages: rows(
+    messages: await rows(
       "SELECT * FROM tutor_messages WHERE user_id=? ORDER BY created_at",
       id,
     ),
     aiEnabled: aiStatus().enabled,
     tutorChats,
     ai: aiStatus(),
-    aiReviews: savedAIReviews(id),
+    aiReviews: await savedAIReviews(id),
     serverDate: today(),
+    maxRecordingBytes: maxRecordingBytes(),
   };
 }
-export function startAttempt(
+export async function startAttempt(
   user: string,
   activityId: string,
   mode: string,
@@ -113,7 +122,7 @@ export function startAttempt(
     throw Error(
       "Only the reading checkpoint supports strict mode in this release.",
     );
-  const existing = row(
+  const existing = await row(
     "SELECT * FROM attempts WHERE user_id=? AND activity_id=? AND mode=? AND submitted_at IS NULL",
     user,
     a.id,
@@ -121,12 +130,12 @@ export function startAttempt(
   );
   if (existing) {
     if (existing.deadline && Date.parse(existing.deadline) <= Date.now())
-      return submitAttempt(user, existing.id);
-    return publicAttempt(existing);
+      return await submitAttempt(user, existing.id);
+    return await publicAttempt(existing);
   }
   const id = randomUUID(),
     now = new Date();
-  run(
+  await run(
     "INSERT INTO attempts(id,user_id,activity_id,skill,mode,day,started_at,deadline,snapshot) VALUES (?,?,?,?,?,?,?,?,?)",
     id,
     user,
@@ -140,21 +149,27 @@ export function startAttempt(
       : null,
     JSON.stringify(a),
   );
-  return publicAttempt(row("SELECT * FROM attempts WHERE id=?", id)!);
+  return await publicAttempt(
+    (await row("SELECT * FROM attempts WHERE id=?", id))!,
+  );
 }
-export function saveAnswers(
+export async function saveAnswers(
   user: string,
   id: string,
   answers: Record<string, string>,
   seconds: number,
   timings?: Record<string, number>,
 ) {
-  const a = row("SELECT * FROM attempts WHERE id=? AND user_id=?", id, user);
+  const a = await row(
+    "SELECT * FROM attempts WHERE id=? AND user_id=?",
+    id,
+    user,
+  );
   if (!a) throw Error("Attempt not found");
-  if (a.submitted_at) return publicAttempt(a);
+  if (a.submitted_at) return await publicAttempt(a);
   if (a.deadline && Date.parse(a.deadline) <= Date.now())
-    return submitAttempt(user, id);
-  if (timings) saveLegacyTiming(user, id, timings);
+    return await submitAttempt(user, id);
+  if (timings) await saveLegacyTiming(user, id, timings);
   const snap = JSON.parse(a.snapshot);
   const valid: Record<string, string> = {};
   for (const q of snap.questions) {
@@ -162,19 +177,25 @@ export function saveAnswers(
       valid[q.id] = answers[q.id].slice(0, 500);
   }
   const elapsed = Math.floor((Date.now() - Date.parse(a.started_at)) / 1000);
-  run(
+  await run(
     "UPDATE attempts SET answers=?,active_seconds=? WHERE id=?",
     JSON.stringify(valid),
     Math.max(a.active_seconds, Math.min(Math.max(0, seconds || 0), elapsed)),
     id,
   );
-  return publicAttempt(row("SELECT * FROM attempts WHERE id=?", id)!);
+  return await publicAttempt(
+    (await row("SELECT * FROM attempts WHERE id=?", id))!,
+  );
 }
-export function submitAttempt(user: string, id: string) {
-  return transaction(() => {
-    const a = row("SELECT * FROM attempts WHERE id=? AND user_id=?", id, user);
+export async function submitAttempt(user: string, id: string) {
+  return await transaction(async () => {
+    const a = await row(
+      "SELECT * FROM attempts WHERE id=? AND user_id=?",
+      id,
+      user,
+    );
     if (!a) throw Error("Attempt not found");
-    if (a.submitted_at) return publicAttempt(a);
+    if (a.submitted_at) return await publicAttempt(a);
     const content = JSON.parse(a.snapshot),
       answers = JSON.parse(a.answers),
       now = new Date().toISOString();
@@ -194,14 +215,14 @@ export function submitAttempt(user: string, id: string) {
       label: "Practice accuracy — not an IELTS band",
       transcript: content.transcript || null,
     };
-    run(
+    await run(
       "UPDATE attempts SET submitted_at=?,result=? WHERE id=?",
       now,
       JSON.stringify(result),
       id,
     );
     for (const q of review.filter((q: any) => !q.correct)) {
-      run(
+      await run(
         `INSERT INTO mistakes(id,user_id,question_id,activity_id,question,answer,correction,explanation,category,due,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,activity_id,question_id) DO UPDATE SET answer=excluded.answer,repetitions=repetitions+1,status='Learning',due=excluded.due`,
         randomUUID(),
         user,
@@ -216,11 +237,13 @@ export function submitAttempt(user: string, id: string) {
         now,
       );
     }
-    return publicAttempt(row("SELECT * FROM attempts WHERE id=?", id)!);
+    return await publicAttempt(
+      (await row("SELECT * FROM attempts WHERE id=?", id))!,
+    );
   });
 }
-export function saveProfile(user: string, input: any) {
-  const old = profile(user);
+export async function saveProfile(user: string, input: any) {
+  const old = await profile(user);
   const p = { ...old };
   if (typeof input.name === "string")
     p.name = input.name.trim().slice(0, 60) || "Learner";
@@ -263,7 +286,7 @@ export function saveProfile(user: string, input: any) {
   }
   for (const key of ["notifications", "audio", "onboarded"])
     if (typeof input[key] === "boolean") p[key] = input[key];
-  run(
+  await run(
     "UPDATE profiles SET data=?,updated_at=? WHERE user_id=?",
     JSON.stringify(p),
     new Date().toISOString(),
@@ -271,30 +294,34 @@ export function saveProfile(user: string, input: any) {
   );
   return p;
 }
-export function completeDay(user: string, day: number, reflection: string) {
+export async function completeDay(
+  user: string,
+  day: number,
+  reflection: string,
+) {
   const lesson = course[day - 1];
   if (!lesson || reflection.trim().length < 20)
     throw Error("Add a reflection of at least 20 characters.");
   let complete = false;
   if (lesson.activity === "writing")
-    complete = !!row(
+    complete = !!(await row(
       "SELECT id FROM writing WHERE user_id=? AND day=? AND submitted_at IS NOT NULL",
       user,
       day,
-    );
+    ));
   else if (lesson.activity === "speaking")
-    complete = !!row(
+    complete = !!(await row(
       "SELECT id FROM recordings WHERE user_id=? AND day=? AND duration>=20",
       user,
       day,
-    );
+    ));
   else
-    complete = !!row(
+    complete = !!(await row(
       "SELECT id FROM attempts WHERE user_id=? AND day=? AND activity_id=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
       user,
       day,
       lesson.activity,
-    );
+    ));
   if (!complete)
     throw Error("Complete the assigned practice before finishing this day.");
   if ([21, 27, 29].includes(day))
@@ -303,29 +330,32 @@ export function completeDay(user: string, day: number, reflection: string) {
     );
   if (
     day === 1 &&
-    (!row(
+    (!(await row(
       "SELECT id FROM attempts WHERE user_id=? AND activity_id=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
       user,
       "vocabulary-diagnostic",
-    ) ||
-      !row(
+    )) ||
+      !(await row(
         "SELECT id FROM attempts WHERE user_id=? AND activity_id=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
         user,
         "reading-1",
-      ) ||
-      !row(
+      )) ||
+      !(await row(
         "SELECT id FROM attempts WHERE user_id=? AND activity_id=? AND submitted_at IS NOT NULL AND json_extract(result,'$.answered')=json_extract(result,'$.total')",
         user,
         "listening-1",
-      ) ||
-      !row(
+      )) ||
+      !(await row(
         "SELECT id FROM writing WHERE user_id=? AND submitted_at IS NOT NULL",
         user,
-      ) ||
-      !row("SELECT id FROM recordings WHERE user_id=? AND duration>=20", user))
+      )) ||
+      !(await row(
+        "SELECT id FROM recordings WHERE user_id=? AND duration>=20",
+        user,
+      )))
   )
     throw Error("Complete all six diagnostic components first.");
-  run(
+  await run(
     "INSERT INTO study_days(user_id,day,reflection,completed_at) VALUES (?,?,?,?) ON CONFLICT(user_id,day) DO UPDATE SET reflection=excluded.reflection",
     user,
     day,
@@ -333,7 +363,7 @@ export function completeDay(user: string, day: number, reflection: string) {
     new Date().toISOString(),
   );
 }
-export function saveWriting(
+export async function saveWriting(
   user: string,
   promptId: string,
   body: string,
@@ -347,13 +377,13 @@ export function saveWriting(
     throw Error(
       `Write at least ${p.task === 1 ? 150 : 250} words before submitting.`,
     );
-  const old = row(
+  const old = await row(
     "SELECT * FROM writing WHERE user_id=? AND prompt_id=?",
     user,
     promptId,
   );
   const now = new Date().toISOString();
-  run(
+  await run(
     "INSERT INTO writing(id,user_id,prompt_id,day,body,submitted_at,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id,prompt_id) DO UPDATE SET body=excluded.body,day=excluded.day,submitted_at=CASE WHEN writing.body=excluded.body AND excluded.submitted_at IS NULL THEN writing.submitted_at ELSE excluded.submitted_at END,feedback=CASE WHEN writing.body=excluded.body THEN writing.feedback ELSE NULL END,updated_at=excluded.updated_at",
     old?.id || randomUUID(),
     user,
@@ -363,13 +393,13 @@ export function saveWriting(
     submit ? now : null,
     now,
   );
-  return row(
+  return await row(
     "SELECT * FROM writing WHERE user_id=? AND prompt_id=?",
     user,
     promptId,
   );
 }
-export function reviewWord(
+export async function reviewWord(
   user: string,
   wordId: string,
   rating: "again" | "good" | "easy",
@@ -379,13 +409,13 @@ export function reviewWord(
     !["again", "good", "easy"].includes(rating)
   )
     throw Error("Invalid review");
-  const old = row(
+  const old = await row(
     "SELECT * FROM vocabulary_reviews WHERE user_id=? AND word_id=?",
     user,
     wordId,
   );
   const s = reviewSchedule(rating, old?.interval_days || 0);
-  run(
+  await run(
     "INSERT INTO vocabulary_reviews(user_id,word_id,interval_days,due,reviews) VALUES (?,?,?,?,1) ON CONFLICT(user_id,word_id) DO UPDATE SET interval_days=excluded.interval_days,due=excluded.due,reviews=reviews+1",
     user,
     wordId,

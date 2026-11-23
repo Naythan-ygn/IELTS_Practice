@@ -23,10 +23,10 @@ export async function GET(req: Request) {
   try {
     const user = await currentUser(),
       params = new URL(req.url).searchParams;
-    assertCoachingAllowed(user);
+    await assertCoachingAllowed(user);
     if (params.get("report"))
       return Response.json(
-        strategyReport(
+        await strategyReport(
           user,
           params.get("attempt") || "",
           params.get("legacy") === "1",
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       );
     if (params.get("explain"))
       return Response.json(
-        explanation(
+        await explanation(
           user,
           params.get("attempt") || "",
           params.get("question") || "",
@@ -44,12 +44,12 @@ export async function GET(req: Request) {
         { headers: { "Cache-Control": "private, no-store" } },
       );
     if (params.get("micro")) {
-      assertCoachingAllowed(user);
-      return Response.json(getMicro(user, params.get("micro")!));
+      await assertCoachingAllowed(user);
+      return Response.json(await getMicro(user, params.get("micro")!));
     }
-    assertCoachingAllowed(user);
+    await assertCoachingAllowed(user);
     return Response.json(
-      { catalog: catalog(), state: strategyState(user) },
+      { catalog: catalog(), state: await strategyState(user) },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (e) {
@@ -69,21 +69,21 @@ export async function POST(req: Request) {
     let result: unknown;
     switch (b.action) {
       case "begin":
-        result = beginStrategy(user, b);
+        result = await beginStrategy(user, b);
         break;
       case "save":
-        result = saveStrategy(user, b.id, b.answers, b.timings);
+        result = await saveStrategy(user, b.id, b.answers, b.timings);
         break;
       case "submit":
-        result = submitStrategy(user, b.id);
+        result = await submitStrategy(user, b.id);
         break;
       case "understand":
-        assertCoachingAllowed(user);
+        await assertCoachingAllowed(user);
         if (!strategies.some((s) => s.id === b.strategyId))
           throw Error("Strategy not found.");
         if (String(b.note || "").trim().length < 20)
           throw Error("Explain the strategy in at least 20 characters.");
-        run(
+        await run(
           "INSERT INTO strategy_progress(user_id,strategy_id,understood_at,note) VALUES (?,?,?,?) ON CONFLICT(user_id,strategy_id) DO UPDATE SET note=excluded.note",
           user,
           b.strategyId,
@@ -93,19 +93,24 @@ export async function POST(req: Request) {
         result = { ok: true };
         break;
       case "lesson":
-        result = lessonStep(user, Number(b.day), b.stage, String(b.body || ""));
+        result = await lessonStep(
+          user,
+          Number(b.day),
+          b.stage,
+          String(b.body || ""),
+        );
         break;
       case "micro":
-        result = generateMicro(user, b.sourceAttempt);
+        result = await generateMicro(user, b.sourceAttempt);
         break;
       case "score":
-        result = saveScenario(user, b.scenario);
+        result = await saveScenario(user, b.scenario);
         break;
       case "timing":
-        result = saveLegacyTiming(user, b.id, b.timings);
+        result = await saveLegacyTiming(user, b.id, b.timings);
         break;
       case "coach": {
-        assertCoachingAllowed(user);
+        await assertCoachingAllowed(user);
         const modes = [
           "Essay Planning",
           "Introduction Builder",
@@ -136,7 +141,7 @@ export async function POST(req: Request) {
           suggestion:
             "Select one sentence to revise, explain the change, and compare the original with your revision. Request AI feedback for specific corrections if connected.",
         };
-        run(
+        await run(
           "INSERT INTO coaching_responses(id,user_id,mode,prompt,original,revision,feedback,updated_at,reason) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,mode) DO UPDATE SET prompt=excluded.prompt,original=excluded.original,revision=excluded.revision,feedback=excluded.feedback,updated_at=excluded.updated_at,reason=excluded.reason",
           randomUUID(),
           user,
